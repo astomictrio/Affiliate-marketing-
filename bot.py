@@ -8,7 +8,7 @@ api_id = 123456  # Replace with your API ID
 api_hash = "your_api_hash"
 
 # 📌 Bot Token (Agar Bot Se Chalana Hai)
-bot_token = "BOT_TOKEN"
+bot_token = "7661788811:AAFNLhxjgl5zC6JXMaAWM5ve6AtRspKiIA4"
 
 # 📌 Source & Target Channels
 source_channel = "@source_channel"  # Yeh source channel hai jahan se deals aayengi
