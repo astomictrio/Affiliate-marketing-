@@ -1,66 +1,68 @@
-from telethon import TelegramClient, events
+import os
+import logging
 import requests
-from bs4 import BeautifulSoup
 import re
+from telethon import TelegramClient, events
 
-# 🛠 Telegram API Credentials (https://my.telegram.org/apps se lein)
-api_id = 123456  # Replace with your API ID
-api_hash = "your_api_hash"
+# Logging setup
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# 📌 Bot Token (Agar Bot Se Chalana Hai)
-bot_token = "7661788811:AAFNLhxjgl5zC6JXMaAWM5ve6AtRspKiIA4"
+# ✅ Bot Credentials (From Environment Variables)
+API_ID = int(os.environ.get("API_ID", ""))
+API_HASH = os.environ.get("API_HASH", "")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+SOURCE_CHANNEL = os.environ.get("SOURCE_CHANNEL", "")
+TARGET_CHANNEL = os.environ.get("TARGET_CHANNEL", "")
+AMAZON_TAG = os.environ.get("AMAZON_TAG", "")
 
-# 📌 Source & Target Channels
-source_channel = "@source_channel"  # Yeh source channel hai jahan se deals aayengi
-target_group = "@target_group"  # Yeh target group hai jahan bot deals bhejega
+# ✅ Check if all credentials are set
+if not all([API_ID, API_HASH, BOT_TOKEN, SOURCE_CHANNEL, TARGET_CHANNEL, AMAZON_TAG]):
+    raise ValueError("⚠️ Missing environment variables! Check your Render settings.")
 
-# 🏷 Amazon Affiliate Tag
-affiliate_tag = "yourtag-21"  # Replace with your Amazon affiliate tag
+# ✅ Connect to Telegram Bot
+client = TelegramClient("bot_session", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
-client = TelegramClient('bot_session', api_id, api_hash)
-
-def get_amazon_product_image(url):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
-    }
-    response = requests.get(url, headers=headers)
-    
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, 'lxml')
-        image_tag = soup.find("img", {"id": "landingImage"})
-        if image_tag:
-            return image_tag["src"]
+# ✅ Function to Fetch Image from Amazon Link
+def fetch_amazon_image(product_url):
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        response = requests.get(product_url, headers=headers, timeout=10)
+        image_url_match = re.search(r'"hiRes":"(https://[^"]+)"', response.text)
+        if image_url_match:
+            return image_url_match.group(1)
+    except Exception as e:
+        logger.error(f"❌ Error fetching image: {e}")
     return None
 
-def replace_affiliate_link(original_url):
-    match = re.search(r'/dp/([A-Z0-9]+)/', original_url)
-    if match:
-        product_id = match.group(1)
-        return f"https://www.amazon.in/dp/{product_id}/?tag={affiliate_tag}"
-    return original_url
+# ✅ Message Forwarding & Image Fetching
+@client.on(events.NewMessage(chats=SOURCE_CHANNEL))
+async def forward_and_replace(event):
+    text = event.message.text or ""
 
-@client.on(events.NewMessage(chats=source_channel))
-async def forward_with_affiliate_link(event):
-    text = event.message.text
-    amazon_link = None
-    
-    for word in text.split():
-        if "amazon" in word and "dp" in word:
-            amazon_link = word  # Extract Amazon Product Link
-            break
-    
-    if amazon_link:
-        new_affiliate_link = replace_affiliate_link(amazon_link)
-        text = text.replace(amazon_link, new_affiliate_link)  # Replace link
+    # ✅ Amazon Affiliate Link Replacement
+    amazon_link_match = re.search(r"(https?://www\.amazon\.in[^\s]+)", text)
+    if amazon_link_match:
+        original_link = amazon_link_match.group(1)
+        affiliate_link = original_link.split("?")[0] + f"?tag={AMAZON_TAG}"
+        text = text.replace(original_link, affiliate_link)
 
-        image_url = get_amazon_product_image(amazon_link)
-        if image_url:
-            await client.send_file(target_group, image_url, caption=text)
-        else:
-            await client.send_message(target_group, text)
+        # ✅ Fetch Image from Amazon if no image in message
+        if not event.message.photo:
+            image_url = fetch_amazon_image(original_link)
+            if image_url:
+                await client.send_file(TARGET_CHANNEL, image_url, caption=text)
+                logger.info("✅ Image fetched & forwarded successfully!")
+                return
+
+    # ✅ Forwarding with Image (If Available)
+    if event.message.photo:
+        await client.send_file(TARGET_CHANNEL, event.message.photo, caption=text)
+        logger.info("✅ Image + Text forwarded successfully!")
     else:
-        await client.send_message(target_group, text)
+        await client.send_message(TARGET_CHANNEL, text)
+        logger.info("✅ Text forwarded successfully!")
 
-print("🤖 Bot is running and replacing Amazon links with your affiliate link...")
-client.start()
+# ✅ Start Bot
+logger.info("🤖 Bot is running...")
 client.run_until_disconnected()
