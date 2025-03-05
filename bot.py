@@ -64,27 +64,3 @@ async def forward_with_affiliate_link(event):
 print("🤖 Bot is running and replacing Amazon links with your affiliate link...")
 client.start()
 client.run_until_disconnected()
-import os
-from telethon.sync import TelegramClient
-
-# Securely fetching credentials from environment variables
-api_id = int(os.getenv("API_ID"))
-api_hash = os.getenv("API_HASH")
-bot_token = os.getenv("BOT_TOKEN")
-
-# Ensure API credentials are provided
-if not all([api_id, api_hash, bot_token]):
-    raise ValueError("API_ID, API_HASH, or BOT_TOKEN is missing. Set them in environment variables.")
-
-# Initialize Telegram bot
-client = TelegramClient('bot', api_id, api_hash)
-
-async def main():
-    await client.start(bot_token=bot_token)
-    print("✅ Bot is running...")
-
-with client:
-    client.loop.run_until_complete(main())
-git add bot.py
-git commit -m "Fixed bot deployment issue"
-git push origin main
